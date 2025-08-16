@@ -1,0 +1,1138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+
+<script>
+(function(){
+  try{
+    var pref = localStorage.getItem('theme-pref') || 'system';
+    var sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var theme = (pref==='dark'||pref==='light') ? pref : (sysDark?'dark':'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  }catch(e){}
+})();
+</script>
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ɴᴏʀᴅʟʏꜱ · 工具百宝箱（v7d 基线·日期UI修正+压缩）</title>
+<meta name="color-scheme" content="dark" />
+<style>
+
+/* === Light/Dark Theme Tokens (Light overrides) === */
+:root[data-theme='light']{
+  --bg:#f5f7fb;
+  --text:#0E1A2F;
+  --muted:#334866;
+  --glass-card:rgba(0,0,0,.06);
+  --glass-panel:rgba(0,0,0,.06);
+  --border:#0b1a3a33;
+  --shadow-card:0 8px 18px rgba(12,20,40,.12), inset 0 1px 0 rgba(255,255,255,.85);
+  --shadow-panel:0 14px 28px rgba(12,20,40,.15), inset 0 1px 0 rgba(255,255,255,.9);
+  --surface-bg: rgba(0,0,0,.05);
+  --surface-border:#0b1a3a26;
+  --surface-fg:#0e1b36;
+}
+:root[data-theme='dark']{ /* 原深色主题不变 */ }
+/* 背景与星空在浅色下的调整 */
+:root[data-theme='light'] body{ background: var(--bg); }
+:root[data-theme='light'] body::after{
+  background: radial-gradient(60rem 40rem at 82% 4%, rgba(70,120,255,.16), transparent 62%),
+              radial-gradient(60rem 40rem at 10% 92%, rgba(90,150,255,.12), transparent 66%),
+              var(--bg);
+  opacity:.9;
+}
+:root[data-theme='light'] body::before{ opacity:.12; }
+:root[data-theme='light'] #fx{ display:none; }
+
+/* 控件与卡片（浅色） */
+:root[data-theme='light'] textarea, 
+:root[data-theme='light'] input[type="text"],
+:root[data-theme='light'] input[type="number"],
+:root[data-theme='light'] input[type="date"],
+:root[data-theme='light'] select{
+  border-color:#c3d0ff; background:#fff; color:var(--text);
+}
+:root[data-theme='light'] .card{ background:rgba(255,255,255,.8); border-color:#10234b22; box-shadow: var(--shadow-card); }
+:root[data-theme='light'] .card:hover{ background:rgba(255,255,255,.95); border-color:#2c61ff33; }
+:root[data-theme='light'] .panel{ background:rgba(255,255,255,.86); border-color:#10234b22; box-shadow: var(--shadow-panel); }
+:root[data-theme='light'] .panel::before{ background:rgba(255,255,255,.6); backdrop-filter: blur(3px) saturate(120%); }
+:root[data-theme='light'] .chip{ background:rgba(0,0,0,.06); border-color:#0b1a3a33; color:#0E1A2F; }
+:root[data-theme='light'] .tab{ background:rgba(0,0,0,.06); border-color:#0b1a3a33; color:#0E1A2F; }
+:root[data-theme='light'] .tab.active{ background:#d8e4ff; border-color:#2b4da84d; color:#0c1833; }
+:root[data-theme='light'] button{ color:#0d1a38; }
+:root[data-theme='light'] button.primary{ color:#eef4ff; background: linear-gradient(#3a4d82,#2b3f71); box-shadow: inset 0 1px 0 #ffffff33, 0 6px 14px rgba(12,20,40,.22); }
+:root[data-theme='light'] .csel-head{ background:rgba(0,0,0,.035); border-color:#0b1a3a26; color:#1a2540; }
+:root[data-theme='light'] .csel-list{ background:#ffffff; border-color:#c9d5ff; }
+:root[data-theme='light'] .csel-opt{ color:#0d1a38; }
+:root[data-theme='light'] .csel-opt[aria-selected="true"], :root[data-theme='light'] .csel-opt:hover{ background:#eef3ff; }
+
+/* 小标题与统计（浅色加深） */
+:root[data-theme='light'] .section-title{ color:#0E1A2F; }
+:root[data-theme='light'] .section-title .tag{ color:#0E1A2F; background:rgba(0,0,0,.06); border-color:#0b1a3a33; }
+:root[data-theme='light'] .substats{ color:#516486; }
+:root[data-theme='light'] .substats b{ color:#223150; }
+
+:root{
+  --bg:#0b0c0f; --text:#e7eaf0; --muted:#a4afc4;
+  --glass-card:rgba(255,255,255,.08); --glass-panel:rgba(255,255,255,.10);
+  --border:#8aa4ff33;
+  --radius-card:20px; --radius-panel:22px;
+  --shadow-card:0 10px 30px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.12);
+  --shadow-panel:0 12px 40px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.14);
+  --font-size:16.5px;
+  --logo-shift-x:-32px; --logo-shift-y:-6px; --logo-scale-x:1.08;
+
+  --ease-emph-out: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-emph-in:  cubic-bezier(0.3, 0, 0.8, 0.15);
+  --pan-open-dur:  280ms; --pan-close-dur: 200ms;
+
+  --surface-bg: rgba(255,255,255,.05);
+  --surface-border: #ffffff22;
+  --surface-fg: #eef4ff;
+
+  --img-max-mb: 25;
+  --vid-max-mb: 120;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+html{background:var(--bg)}
+body{
+  margin:0; color:var(--text);
+  font:var(--font-size)/1.6 -apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","PingFang SC","Microsoft YaHei","Noto Sans CJK SC",Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  background: var(--bg); min-height:100vh; position:relative; overflow-x:hidden; cursor: default;
+}
+body::after{
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background: radial-gradient(60rem 40rem at 76% 6%, rgba(43,99,255,.24), transparent 62%),
+             radial-gradient(70rem 50rem at 12% 88%, rgba(98,158,255,.18), transparent 66%), var(--bg);
+}
+body::before{
+  content:""; position:fixed; inset:0; z-index:1; pointer-events:none;
+  background-image: radial-gradient(#ffffff26 1px, transparent 1px);
+  background-size:2px 2px; opacity:.22;
+}
+#fx{ position:fixed; inset:0; z-index:2; pointer-events:none; opacity:.5; }
+
+.wrap{ max-width:1120px; margin:10vh auto 8vh; padding:0 28px 18vh; position:relative; z-index:3; }
+.logo{ margin:0 0 20px 0; font-size:46px; font-weight:900; letter-spacing:.34em;
+  transform: translate(var(--logo-shift-x), var(--logo-shift-y)) scaleX(var(--logo-scale-x));
+  transform-origin:left center; user-select:none; text-shadow:0 6px 38px rgba(110,163,255,.22);
+}
+.grid{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:18px; margin:8px 0 28px; }
+@media (max-width:1100px){ .grid{ grid-template-columns:repeat(4,1fr) } }
+@media (max-width:820px){ .grid{ grid-template-columns:repeat(2,1fr) } }
+
+.card{
+  border:1px solid var(--border); background:var(--glass-card);
+  border-radius:var(--radius-card); padding:18px 16px;
+  display:flex; align-items:flex-end; gap:12px; cursor:pointer;
+  transition: transform .12s, box-shadow .12s, background .12s, border-color .12s;
+  box-shadow: var(--shadow-card); user-select:none;
+}
+.card:hover{ transform:translateY(-3px); background:rgba(255,255,255,.12); border-color:#9bb8ff66 }
+.card .emoji{ font-size:24px; filter:drop-shadow(0 6px 14px rgba(110,163,255,.28)); }
+.card .name{ font-weight:700; font-size:16px; letter-spacing:.02em }
+
+.panel{
+  border:1px solid var(--border); background:var(--glass-panel);
+  border-radius:var(--radius-panel);
+  display:none; box-shadow: var(--shadow-panel); margin:0 0 28px; padding:20px;
+  position:relative; overflow: visible; transform-origin: top center; will-change: transform, opacity, max-height, filter;
+}
+/* 轻玻璃：保持 v7d 的视觉 */
+.panel::before{ content:""; position:absolute; inset:0; border-radius:inherit; background: rgba(16, 19, 25, .55); -webkit-backdrop-filter: blur(3px) saturate(110%); backdrop-filter: blur(3px) saturate(110%); z-index:0; }
+.panel > *{ position:relative; z-index:1; }
+.panel.is-expanding{
+  transition: max-height var(--pan-open-dur) var(--ease-emph-out), opacity var(--pan-open-dur) var(--ease-emph-out), transform var(--pan-open-dur) var(--ease-emph-out), filter var(--pan-open-dur) linear;
+  opacity:.001; transform: translateY(-6px) scaleY(.985); filter: blur(1px);
+}
+.panel.is-collapsing{
+  transition: max-height var(--pan-close-dur) var(--ease-emph-in), opacity var(--pan-close-dur) var(--ease-emph-in), transform var(--pan-close-dur) var(--ease-emph-in), filter var(--pan-close-dur) linear;
+  opacity:0; transform: translateY(-6px) scaleY(.985); filter: blur(1px); margin-bottom:0 !important;
+}
+.panel.is-expanding.is-open{ opacity:1; transform: translateY(0) scaleY(1); filter:none; margin-bottom:28px; }
+
+textarea, input[type="text"], input[type="number"], input[type="date"], select, input[type="file"]{
+  width:100%; padding:12px 12px; border-radius:12px;
+  border:1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06);
+  color:var(--text); font-size:16px;
+}
+textarea{ min-height:220px; resize:vertical; } ::placeholder{ color:#c7d5ff7a }
+/* ---- 统一控件高度，解决按钮“抬起来” ---- */
+:root{ --ctl-h: 44px; }
+input[type="text"], input[type="number"], input[type="date"],
+.csel-head{
+  height: var(--ctl-h);
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+}
+button{
+  height: var(--ctl-h);
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+}
+
+
+.kpi{ display:flex; gap:10px; flex-wrap:wrap; margin:12px 0 }
+.kpi .chip{ padding:8px 14px; border-radius:12px; background:rgba(255,255,255,.06); border:1px solid #ffffff22; color:#dbe6ff; font-size:15px; min-width:120px; text-align:center; font-weight:800; user-select:none; cursor:default; }
+.section-title{ margin:26px 0 12px; font-size:20px; line-height:1.25; font-weight:900; color:#f4f7ff; letter-spacing:.01em; display:flex; align-items:flex-end; gap:10px; }
+.section-title .tag{ font-size:13px; padding:2px 10px; border:1px solid #ffffff33; background:rgba(255,255,255,.07); border-radius:999px; color:#cdd7ea; }
+.sep{ height:1px; background:linear-gradient(90deg,transparent,#ffffff18,transparent); margin:26px 0; }
+
+button{
+  padding:10px 14px; border-radius:12px; border:1px solid #8aa4ff40; background:rgba(255,255,255,.06);
+  color:#eef4ff; font-weight:600; font-size:15px; box-shadow: inset 0 1px 0 #ffffff1a, 0 4px 10px rgba(0,0,0,.24); cursor:pointer; transition:transform .12s, border-color .12s, background .12s;
+}
+button:hover{ border-color:#a9c4ff66; transform:translateY(-1px); }
+button.primary{ background: linear-gradient(#2a3b6b,#223157); border-color:#7ea8ff66; box-shadow: inset 0 1px 0 #ffffff22, 0 6px 14px rgba(0,0,0,.30); }
+button.subtle{ background: rgba(255,255,255,.05); border-color:#ffffff22; box-shadow: inset 0 1px 0 #ffffff14, 0 2px 6px rgba(0,0,0,.18); }
+
+.actionsbar{ display:flex; align-items:flex-end; gap:16px; margin-top:10px; }
+.substats{ display:flex; gap:14px; color:#bfc9de; font-size:13px; } .substats b{ color:#eaf1ff; font-weight:800; }
+.muted{color:var(--muted); font-size:14px} h3{margin:0 0 8px; font-size:20px; user-select:none; cursor:default;}
+
+.tabs{ display:flex; gap:8px; margin:6px 0 14px; }
+.tab{ padding:8px 12px; border-radius:999px; border:1px solid #ffffff22; background:rgba(255,255,255,.07); color:#eaf1ff; cursor:pointer; user-select:none; }
+.tab.active{ background:#2b3d6a; border-color:#8aa4ff66; }
+
+.row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin:12px 0 }
+.btn-wrap{ display:flex; align-items:flex-end; padding-bottom:0 }
+.row.tight > *{ flex:0 0 auto; }
+.row.shrink input[type="date"]{ width:260px; } /* 日期输入不要太长 */
+.row.shrink input[type="number"]{ width:160px; }
+.result-row{ margin-top:8px; }
+
+.thumbgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-top:12px; }
+.item{ background:#00000033; border:1px solid #ffffff22; border-radius:12px; padding:10px; }
+.item a{ color:#eaf1ff; text-decoration:none; } .item a:hover{ text-decoration:underline; }
+progress{ width:260px; height:12px; border-radius:8px; overflow:hidden; }
+.badge{ display:inline-block; padding:2px 8px; border-radius:999px; background:#ffffff1a; border:1px solid #ffffff22; font-size:12px; color:#cfe0ff; }
+
+/* 自定义 Select（深色，下拉可翻转） */
+.csel{ position:relative; display:inline-block; min-width:220px; }
+.csel select{ display:none !important; }
+.csel-head{ width:100%; padding:10px 12px; border-radius:12px; border:1px solid var(--surface-border); background: var(--surface-bg); color: var(--surface-fg);
+  cursor:pointer; display:flex; align-items:flex-end; justify-content:space-between; gap:8px; box-shadow: inset 0 1px 2px rgba(0,0,0,.25);
+}
+.csel-head:after{ content:"▾"; opacity:.8; }
+.csel-list{ position:absolute; left:0; right:0; top:calc(100% + 6px); z-index:50; background:#0f1421; border:1px solid #2b3d6a; border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.45); max-height:320px; overflow:auto; padding:6px; display:none; }
+.csel.open .csel-list{ display:block; animation:menuIn .14s ease-out; }
+@keyframes menuIn{ from{ transform:translateY(-4px); opacity:0 } to{ transform:translateY(0); opacity:1 } }
+.csel-opt{ padding:9px 10px; border-radius:8px; color:#dfe8ff; cursor:pointer; }
+.csel-opt[aria-selected="true"], .csel-opt:hover{ background:#1d2a49; }
+.csel-opt[aria-disabled="true"]{ opacity:.4; cursor:not-allowed; }
+
+/* Theme switcher */
+#theme-toggle{
+  position: fixed; top: 18px; right: 18px; z-index: 999;
+  display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px;
+  background:rgba(255,255,255,.08); border:1px solid #8aa4ff40; color:#eef4ff;
+  cursor:pointer; user-select:none; box-shadow:0 8px 22px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.2);
+}
+#theme-toggle:hover{ border-color:#a9c4ff66; transform:translateY(-1px); }
+:root[data-theme='light'] #theme-toggle{ background:rgba(0,0,0,.05); color:#0d1a38; border-color:#0b1a3a26; box-shadow:0 8px 22px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.8); }
+#theme-toggle #theme-menu{
+  position:absolute; top:calc(100% + 8px); right:0; min-width:140px;
+  background:#0f1421; border:1px solid #2b3d6a; border-radius:12px;
+  box-shadow:0 16px 40px rgba(0,0,0,.45); padding:6px; display:none;
+}
+:root[data-theme='light'] #theme-toggle #theme-menu{ background:#ffffff; border-color:#c9d5ff; }
+#theme-toggle.open #theme-menu{ display:block; }
+#theme-toggle .opt{ padding:9px 10px; border-radius:8px; color:#dfe8ff; cursor:pointer; }
+#theme-toggle .opt:hover{ background:#1d2a49; }
+:root[data-theme='light'] #theme-toggle .opt{ color:#0d1a38; }
+:root[data-theme='light'] #theme-toggle .opt:hover{ background:#eef3ff; }
+
+/* === Dock(收起/展开) 只增不改 === */
+.panel { position: relative; }
+.nl-dock{
+  position:absolute; right:18px; bottom:14px; z-index:2;
+  height: var(--ctl-h, 44px); padding:0 14px;
+  border:1px solid #8aa4ff40; border-radius:12px;
+  background: rgba(255,255,255,.06); color:#eef4ff;
+  display:inline-flex; align-items:center; cursor:pointer;
+  box-shadow: inset 0 1px 0 #ffffff1a, 0 4px 10px rgba(0,0,0,.24);
+}
+:root[data-theme='light'] .nl-dock{
+  background: rgba(0,0,0,.05); color:#0d1a38; border-color:#0b1a3a26;
+  box-shadow: 0 4px 10px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.8);
+}
+
+.panel.nl-collapsed{
+  max-height:56px !important; overflow:hidden;
+}
+@media (max-width:600px){
+  .panel.nl-collapsed{ max-height:50px !important; }
+}
+
+</style>
+</head>
+<body>
+<canvas id="fx"></canvas>
+
+<!-- Theme Toggle -->
+<div id="theme-toggle" aria-label="主题" title="主题" role="button" tabindex="0">
+  <span class="ico">🌗</span><span class="lab">主题</span>
+  <div id="theme-menu" role="menu" aria-hidden="true">
+    <div class="opt" data-v="system" role="menuitem">跟随系统</div>
+    <div class="opt" data-v="light" role="menuitem">浅色</div>
+    <div class="opt" data-v="dark" role="menuitem">深色</div>
+  </div>
+</div>
+
+
+<div class="wrap">
+  <h1 class="logo">ɴᴏʀᴅʟʏꜱ</h1>
+
+  <section id="grid" class="grid">
+    <div class="card" data-panel="wc"><div class="emoji">📝</div><div class="name">字数统计</div></div>
+    <div class="card" data-panel="conv"><div class="emoji">🔄</div><div class="name">格式转换</div></div>
+    <div class="card" data-panel="compress"><div class="emoji">🗜️</div><div class="name">图片/视频压缩</div></div>
+    <div class="card" data-panel="ydl"><div class="emoji">📥</div><div class="name">在线视频下载</div></div>
+    <div class="card" data-panel="date"><div class="emoji">📆</div><div class="name">日期换算</div></div>
+  </section>
+
+  <!-- 字数统计 -->
+  <section id="panel-wc" class="panel" style="display:block">
+    <h3>📝 字数统计</h3>
+    <textarea id="wc-input" placeholder="在这里粘贴或输入文本…"></textarea>
+    <div class="kpi">
+      <div class="chip">汉字：<span id="wc-han">0</span></div>
+      <div class="chip">字符：<span id="wc-chars">0</span></div>
+      <div class="chip">单词：<span id="wc-words">0</span></div>
+    </div>
+    <div class="actionsbar">
+      <button id="wc-clear" class="subtle">清空</button>
+      <div class="substats">
+        <span>数字：<b id="wc-digits">0</b></span>
+        <span>标点：<b id="wc-punct">0</b></span>
+        <span>字母：<b id="wc-letters">0</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 格式转换（图片 / 视频） -->
+  <section id="panel-conv" class="panel">
+    <h3>🔄 格式转换</h3>
+    <div class="tabs" id="cv-tabs">
+      <div class="tab active" data-t="image">图片</div>
+      <div class="tab" data-t="video">视频</div>
+    </div>
+
+    <!-- 图片转换 -->
+    <div id="cv-image">
+      <div class="row">
+        <input id="img-file" type="file" accept="image/*" multiple>
+        <div class="csel" data-for="img-format"></div>
+        <div class="csel" data-for="img-quality"></div>
+        <div class="csel" data-for="img-max"></div>
+        <label>JPEG 背景<input id="img-bg" type="color" value="#000000"></label>
+        <button id="img-run" class="primary">开始转换</button>
+        <button id="img-clear" class="subtle">清空结果</button>
+        <progress id="img-pg" max="1" value="0"></progress>
+      </div>
+      <select id="img-format" hidden>
+        <option value="image/webp">WebP</option>
+        <option value="image/jpeg">JPEG（.jpg）</option>
+        <option value="image/png">PNG（.png）</option>
+      </select>
+      <select id="img-quality" hidden>
+        <option value="95">质量 95</option>
+        <option value="90" selected>质量 90</option>
+        <option value="85">质量 85</option>
+        <option value="80">质量 80</option>
+        <option value="70">质量 70</option>
+      </select>
+      <select id="img-max" hidden>
+        <option value="0" selected>最大边 自动（按设备）</option>
+        <option value="1200">最大边 1200</option>
+        <option value="1800">最大边 1800</option>
+        <option value="2400">最大边 2400</option>
+        <option value="3600">最大边 3600</option>
+      </select>
+      <div class="muted">建议：单张 ≤ <b id="img-max-mb-label"></b> MB；超大原图会占内存，必要时设置“最大边”。</div>
+      <div id="img-out" class="thumbgrid"></div>
+      <div class="sep"></div>
+    </div>
+
+    <!-- 视频转换 -->
+    <div id="cv-video" hidden>
+      <div class="row">
+        <input id="vid-file" type="file" accept="video/*">
+        <button id="vid-load" class="primary">加载引擎</button>
+        <button id="vid-clear" class="subtle">清空结果</button>
+        <progress id="vid-pg" max="1" value="0"></progress>
+      </div>
+      <div class="row">
+        <button id="to-mp3" class="primary">提取音频（MP3）</button>
+        <div class="csel" data-for="gif-fps"></div>
+        <div class="csel" data-for="gif-w"></div>
+        <button id="to-gif" class="primary">转 GIF</button>
+      </div>
+      <select id="gif-fps" hidden>
+        <option>8</option><option selected>12</option><option>15</option><option>24</option><option>30</option>
+      </select>
+      <select id="gif-w" hidden>
+        <option>320</option><option selected>480</option><option>640</option><option>720</option><option>1080</option>
+      </select>
+      <div class="muted">建议：单个视频 ≤ <b id="vid-max-mb-label"></b> MB。首次加载 <code>ffmpeg.wasm</code> 约 20MB（已支持本地/多CDN 兜底）。</div>
+      <div id="vid-links" class="row" style="margin-top:8px"></div>
+      <pre id="vid-log" style="white-space:pre-wrap"></pre>
+    </div>
+  </section>
+
+  <!-- 图片/视频压缩 -->
+  <section id="panel-compress" class="panel">
+    <h3>🗜️ 图片/视频压缩</h3>
+    <div class="tabs" id="cp-tabs">
+      <div class="tab active" data-t="imgc">图片压缩</div>
+      <div class="tab" data-t="vidc">视频压缩</div>
+    </div>
+
+    <!-- 图片压缩 -->
+    <div id="cp-img">
+      <div class="row">
+        <input id="cp-img-file" type="file" accept="image/*" multiple>
+        <div class="csel" data-for="cp-img-mode"></div>
+        <div class="csel" data-for="cp-img-quality"></div>
+        <div class="csel" data-for="cp-img-max"></div>
+        <input id="cp-img-target" type="number" placeholder="目标大小(KB)" style="width:180px">
+      </div>
+      <select id="cp-img-mode" hidden>
+        <option value="q" selected>按质量（推荐）</option>
+        <option value="kb">按目标大小(KB)</option>
+      </select>
+      <select id="cp-img-quality" hidden>
+        <option value="92">质量 92</option><option value="88" selected>质量 88</option>
+        <option value="82">质量 82</option><option value="76">质量 76</option>
+        <option value="70">质量 70</option>
+      </select>
+      <select id="cp-img-max" hidden>
+        <option value="0" selected>最大边 自动（按设备）</option>
+        <option value="2400">最大边 2400</option><option value="1800">最大边 1800</option>
+        <option value="1600">最大边 1600</option><option value="1200">最大边 1200</option>
+      </select>
+
+      <div class="row">
+        <button id="cp-img-run" class="primary">开始压缩</button>
+        <button id="cp-img-clear" class="subtle">清空结果</button>
+        <progress id="cp-img-pg" max="1" value="0"></progress>
+      </div>
+      <div class="muted">说明：按“目标大小(KB)”会自动迭代质量，尽量接近目标且不超出（最多 8 次）。</div>
+      <div id="cp-img-out" class="thumbgrid"></div>
+      <div class="sep"></div>
+    </div>
+
+    <!-- 视频压缩 -->
+    <div id="cp-vid" hidden>
+      <div class="row">
+        <input id="cp-vid-file" type="file" accept="video/*">
+        <button id="cp-vid-load" class="primary">加载引擎</button>
+        <progress id="cp-vid-pg" max="1" value="0"></progress>
+      </div>
+      <div class="row">
+        <div class="csel" data-for="cp-vid-preset"></div>
+        <div class="csel" data-for="cp-vid-w"></div>
+        <div class="csel" data-for="cp-vid-fps"></div>
+        <div class="csel" data-for="cp-vid-crf"></div>
+        <div class="csel" data-for="cp-vid-ab"></div>
+        <button id="cp-vid-run" class="primary">开始压缩</button>
+      </div>
+      <select id="cp-vid-preset" hidden>
+        <option value="veryfast" selected>veryfast（速度快）</option>
+        <option value="faster">faster</option>
+        <option value="fast">fast</option>
+        <option value="medium">medium（默认）</option>
+      </select>
+      <select id="cp-vid-w" hidden>
+        <option value="0" selected>分辨率保持</option>
+        <option value="1080">1080宽</option><option value="720">720宽</option>
+        <option value="540">540宽</option><option value="480">480宽</option>
+      </select>
+      <select id="cp-vid-fps" hidden>
+        <option value="0" selected>保留帧率</option>
+        <option value="30">30fps</option><option value="24">24fps</option>
+      </select>
+      <select id="cp-vid-crf" hidden>
+        <option value="26">CRF 26</option><option value="28" selected>CRF 28</option>
+        <option value="30">CRF 30</option><option value="32">CRF 32（更小）</option>
+      </select>
+      <select id="cp-vid-ab" hidden>
+        <option value="128">音频 128k</option><option value="96">音频 96k</option>
+        <option value="160" selected>音频 160k</option><option value="192">音频 192k</option>
+      </select>
+      <div class="muted">提示：前端压缩适合 ≤120MB/≤10分钟。如失败或极慢，建议用本机 ffmpeg 或未来“云端模式”。</div>
+      <div id="cp-vid-links" class="row" style="margin-top:8px"></div>
+      <pre id="cp-vid-log" style="white-space:pre-wrap"></pre>
+    </div>
+  </section>
+
+  <section id="panel-ydl" class="panel"><h3>📥 在线视频下载</h3><div class="muted">多站点限制较多，倾向未来用服务器方案。</div></section>
+
+  <!-- 日期换算（完整 + UI 修正：输入行缩短，结果单独一行） -->
+  <section id="panel-date" class="panel">
+    <h3>📆 日期换算</h3>
+
+    <div class="sep"></div>
+    <h4 class="section-title">几天后的日期 <span class="tag">加/减 天数</span></h4>
+    <div class="row">
+      <div style="flex:1 1 260px"><label>起始日期</label><input type="date" id="d-base"></div>
+      <div style="flex:1 1 200px"><label>相差天数</label><input type="number" id="d-offset" value="0"></div>
+      <div class="btn-wrap"><button class="primary" id="btn-add">计算日期</button></div>
+    </div>
+    <div class="kpi result-row">
+      <div class="chip">结果：<span id="d-add-out">—</span></div>
+      <div class="chip">星期：<span id="d-add-week">—</span></div>
+      <div class="chip">农历：<span id="d-add-lunar">—</span></div>
+    </div>
+
+    <div class="sep"></div>
+    <h4 class="section-title">日期差 <span class="tag">A 与 B 相差</span></h4>
+    <div class="row">
+      <div style="flex:1 1 260px"><label>日期 A</label><input type="date" id="d-a"></div>
+      <div style="flex:1 1 260px"><label>日期 B</label><input type="date" id="d-b"></div>
+      <div class="btn-wrap"><button class="primary" id="btn-diff">计算日差</button></div>
+    </div>
+    <div class="kpi result-row">
+      <div class="chip">相差：<span id="d-diff-days">—</span> 天</div>
+      <div class="chip">约：<span id="d-diff-weeks">—</span></div>
+    </div>
+
+    <div class="sep"></div>
+    <h4 class="section-title">公历 ↔ 农历 <span class="tag">1900–2100</span></h4>
+    <div class="row shrink">
+      <div style="flex:0 0 260px"><label>公历 → 农历</label><input type="date" id="g2l-date"></div>
+      <div class="btn-wrap">
+        <button id="btn-g2l" class="primary">转换</button>
+      </div>
+    </div>
+    <div class="kpi result-row">
+      <div class="chip">农历：<span id="g2l-out">—</span></div>
+    </div>
+
+    <div class="row shrink">
+      <div style="flex:0 0 160px"><label>农历年</label><input type="number" id="l-year" placeholder="如 2025"></div>
+      <div style="flex:0 0 140px"><label>月 (1–12)</label><input type="number" id="l-month" placeholder="1-12"></div>
+      <div style="flex:0 0 140px"><label>日 (1–30)</label><input type="number" id="l-day" placeholder="1-30"></div>
+      <div style="flex:0 0 140px"><label>闰月？</label>
+        <div class="csel" data-for="l-leap"></div>
+        <select id="l-leap" hidden><option value="否" selected>否</option><option value="是">是</option></select>
+      </div>
+      <div class="btn-wrap"><button id="btn-l2g" class="primary">农历 → 公历</button></div>
+    </div>
+    <div class="kpi result-row">
+      <div class="chip">公历：<span id="l2g-out">—</span></div>
+      <div class="chip">星期：<span id="l2g-week">—</span></div>
+    </div>
+
+    <div class="sep"></div>
+    <h4 class="section-title">某日是星期几 <span class="tag">快速</span></h4>
+    <div class="row shrink">
+      <div style="flex:0 0 260px"><label>选择日期</label><input type="date" id="w-date"></div>
+      <div class="btn-wrap"><button id="btn-week" class="primary">计算</button></div>
+    </div>
+    <div class="kpi result-row">
+      <div class="chip">结果：<span id="w-out">—</span></div>
+    </div>
+
+    <div class="muted" style="font-size:13px">注：农历换算为常见算法，当前范围 1900–2100 年。</div>
+  </section>
+</div>
+
+<script>
+/* 面板切换（动画 & 只开一块）v3.2 —— 串行队列 + 超时兜底 + 强制 reflow */
+(function(){
+  const cards  = document.querySelectorAll('.card');
+  const panels = [...document.querySelectorAll('.panel')];
+  const first  = document.getElementById('panel-wc');
+
+  // 初始：只显示第一块
+  panels.forEach(p => p.style.display = 'none');
+  first.style.display = 'block';
+  first.classList.add('is-open');
+
+  // ---- 内部状态 ----
+  let animating = false;   // 是否在执行动画
+  let queued    = null;    // 最近一次点击想要去的目标（合并快速连点）
+  let token     = 0;       // 本次切换的令牌（避免旧动画回调误操作）
+
+  // transitionend 可靠触发（带超时兜底）
+  function onceTransition(el, prop, timeout = 420){
+    return new Promise(resolve=>{
+      let done = false;
+      const h = (e)=>{
+        if(e.target !== el || (prop && e.propertyName !== prop)) return;
+        el.removeEventListener('transitionend', h);
+        done = true; resolve();
+      };
+      el.addEventListener('transitionend', h);
+      setTimeout(()=>{ if(done) return; el.removeEventListener('transitionend', h); resolve(); }, timeout);
+    });
+  }
+  // 强制 reflow，确保 0px -> Npx 的动画能起跳
+  function forceLayout(el){ void el.offsetHeight; }
+
+  async function collapse(cur, tk){
+    if(!cur) return;
+    cur.style.overflow   = 'hidden';
+    cur.classList.add('is-collapsing');
+    cur.style.maxHeight  = cur.scrollHeight + 'px';
+    forceLayout(cur);
+    cur.style.maxHeight  = '0px';
+    await onceTransition(cur, 'max-height');
+    if (tk !== token) return; // 这次切换已被新一次取代
+    cur.classList.remove('is-open','is-collapsing');
+    cur.style.display = 'none';
+    cur.style.removeProperty('max-height');
+    cur.style.removeProperty('overflow');
+  }
+
+  async function expand(next, tk){
+    // 确保不是收起态，否则 0->内容高度会被卡住
+    next.classList.remove('nl-collapsed');
+    next.style.display = 'block';
+    next.classList.add('is-expanding','is-open');
+    next.style.overflow  = 'hidden';
+    next.style.maxHeight = '0px';
+    forceLayout(next);
+    next.style.maxHeight = next.scrollHeight + 'px';
+    await onceTransition(next, 'max-height');
+    if (tk !== token) return;
+    next.classList.remove('is-expanding');
+    next.style.removeProperty('max-height');
+    next.style.removeProperty('overflow');
+  }
+
+  // 被收起时的直接隐藏（避免 0px 动画被 !important 卡住）
+  function instantHide(cur){
+    if(!cur) return;
+    cur.classList.remove('is-open','is-expanding','is-collapsing');
+    cur.style.display = 'none';
+    cur.style.removeProperty('max-height');
+    cur.style.removeProperty('overflow');
+  }
+
+  // 串行执行：把快速连点合并为“最后一次意图”
+  async function openPanel(next){
+    queued = next;           // 记录最新目标
+    if (animating) return;   // 正在跑上一轮，就先合并
+
+    animating = true;
+    while(queued){
+      const tk    = ++token; // 本轮令牌
+      const target= queued;
+      queued = null;
+
+      const cur = document.querySelector('.panel.is-open');
+
+      // 点击的正是当前面板：如果处于收起态则直接拉开
+      if (cur === target){
+        if (cur.classList.contains('nl-collapsed')){
+          const btn = cur.querySelector('.nl-dock'); if (btn) btn.textContent = '收起';
+          await expand(cur, tk);
+        }
+        continue; // 不用关闭再打开
+      }
+
+      // 当前若已收起，不做 0px 动画，直接隐藏再展开目标
+      if (cur && cur.classList.contains('nl-collapsed')){
+        instantHide(cur);
+        await expand(target, tk);
+      }else{
+        await collapse(cur, tk);
+        await expand(target, tk);
+      }
+    }
+    animating = false;
+  }
+
+  // 绑定卡片点击（不加防抖，交给队列合并）
+  cards.forEach(card=>{
+    card.addEventListener('click', ()=>{
+      const id   = card.getAttribute('data-panel');
+      const next = document.getElementById('panel-' + id);
+      if (!next) return;
+      openPanel(next);
+    });
+  });
+})();
+</script>
+
+
+<script>
+/* Dock(收起/展开) —— 只增不改：为每个 .panel 自动加按钮；点击卡片时强制展开 */
+(function(){
+  const MIN = 56; // 收起后的高度(px)
+
+  function collapse(p, btn){
+    // 先把当前真实高度写入 max-height，再降到 MIN，形成动画
+    p.style.overflow = 'hidden';
+    p.style.maxHeight = p.scrollHeight + 'px';
+    p.classList.add('is-collapsing');
+    requestAnimationFrame(()=>{ p.style.maxHeight = MIN + 'px'; });
+    p.addEventListener('transitionend', function h(e){
+      if(e.propertyName !== 'max-height') return;
+      p.removeEventListener('transitionend', h);
+      p.classList.remove('is-collapsing');
+      p.classList.add('nl-collapsed');
+      p.style.removeProperty('overflow');   // 保持 max-height:MIN 以便保持折叠
+      btn.textContent = '展开';
+    });
+  }
+
+  function expand(p, btn){
+    // 从 MIN 展开到内容高度；结束后移除 max-height
+    p.classList.remove('nl-collapsed');
+    p.style.overflow = 'hidden';
+    p.style.maxHeight = p.scrollHeight + 'px'; // 先写一次，确保有起点
+    requestAnimationFrame(()=>{ p.style.maxHeight = p.scrollHeight + 'px'; });
+    p.classList.add('is-expanding');
+    p.addEventListener('transitionend', function h(e){
+      if(e.propertyName !== 'max-height') return;
+      p.removeEventListener('transitionend', h);
+      p.classList.remove('is-expanding');
+      p.style.removeProperty('max-height');
+      p.style.removeProperty('overflow');
+      btn.textContent = '收起';
+    });
+  }
+
+  function ensureDock(p){
+    if (p.querySelector('.nl-dock')) return; // 已经有就不重复加
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'nl-dock';
+    btn.textContent = '收起';
+    p.appendChild(btn);
+
+    btn.addEventListener('click', ()=>{
+      if (p.classList.contains('nl-collapsed')) expand(p, btn);
+      else collapse(p, btn);
+    });
+  }
+
+  // 1) 所有面板补按钮
+  document.querySelectorAll('.panel').forEach(ensureDock);
+
+  // 2) 点击上方卡片，强制目标面板处于“展开”状态（不管之前是否收起）
+  document.querySelectorAll('.card').forEach(card=>{
+    card.addEventListener('click', ()=>{
+      const id = card.getAttribute('data-panel');
+      const p  = document.getElementById('panel-' + id);
+      if (!p) return;
+      const btn = p.querySelector('.nl-dock');
+      if (p.classList.contains('nl-collapsed') && btn){
+        // 直接触发一次展开
+        expand(p, btn);
+      }
+    });
+  });
+})();
+</script>
+
+
+<script>
+/* 子标签切换 */
+(function bindTabs(){
+  function bind(rootId, map){
+    const tabs=document.querySelectorAll(rootId+' .tab');
+    tabs.forEach(t=>t.addEventListener('click',()=>{
+      tabs.forEach(x=>x.classList.remove('active')); t.classList.add('active');
+      Object.keys(map).forEach(k=>document.querySelector(map[k]).hidden = (k!==t.dataset.t));
+    }));
+  }
+  bind('#cv-tabs',{image:'#cv-image',video:'#cv-video'});
+  bind('#cp-tabs',{imgc:'#cp-img',vidc:'#cp-vid'});
+})();
+</script>
+
+<script>
+/* 自定义 Select 渲染器 */
+(function(){
+  function enhance(wrapper){
+    const targetId=wrapper.getAttribute('data-for'); const sel=document.getElementById(targetId); if(!sel) return;
+    wrapper.classList.add('csel');
+    const head=document.createElement('button'); head.type='button'; head.className='csel-head'; head.setAttribute('aria-haspopup','listbox');
+    const list=document.createElement('div'); list.className='csel-list'; list.setAttribute('role','listbox');
+    wrapper.append(head,list);
+    function sync(){
+      head.textContent=sel.options[sel.selectedIndex]?.text||'选择…'; list.innerHTML='';
+      [...sel.options].forEach((op,i)=>{ const d=document.createElement('div'); d.className='csel-opt'; d.textContent=op.text;
+        if(op.disabled) d.setAttribute('aria-disabled','true'); if(i===sel.selectedIndex) d.setAttribute('aria-selected','true');
+        d.addEventListener('click',()=>{ if(op.disabled) return; sel.selectedIndex=i; sel.dispatchEvent(new Event('change')); sync(); close();});
+        list.appendChild(d);
+      });
+    }
+    function open(){
+      document.querySelectorAll('.csel .csel-list').forEach(x=>x.style.display='none');
+      document.querySelectorAll('.csel').forEach(x=>x.classList.remove('open'));
+      const rect=wrapper.getBoundingClientRect(), below=window.innerHeight-rect.bottom-12, above=rect.top-12;
+      const desired=Math.min(320, Math.max(below,above,160)); list.style.maxHeight=desired+'px';
+      if(below>=220){ list.style.top='calc(100% + 6px)'; list.style.bottom='auto'; } else { list.style.top='auto'; list.style.bottom='calc(100% + 6px)'; }
+      list.style.display='block'; wrapper.classList.add('open');
+    }
+    function close(){ list.style.display='none'; wrapper.classList.remove('open'); }
+    head.addEventListener('click',(e)=>{ e.stopPropagation(); wrapper.classList.contains('open')?close():open(); });
+    document.addEventListener('click',(e)=>{ if(!wrapper.contains(e.target)) close(); });
+    sync();
+  }
+  document.querySelectorAll('.csel[data-for]').forEach(enhance);
+})();
+</script>
+
+<script>
+/* 字数统计 */
+(function(){
+  var input=document.getElementById('wc-input');
+  function update(){
+    var t=input.value||'';
+    var charCount=Array.from(t).length;
+    var hanRegex=/[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u2E80-\u2EFF\u3005\u303B\u{20000}-\u{2A6DF}\u{2A700}-\u{2B73F}\u{2B740}-\u{2B81F}\u{2B820}-\u{2CEAF}\u{2CEB0}-\u{2EBEF}\u{30000}-\u{3134F}]/gu;
+    var hanCount=(t.match(hanRegex)||[]).length;
+    var wordCount=(t.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g)||[]).length;
+    var digits =(t.match(/[0-9]/g)||[]).length;
+    var punct  =(t.match(/[\p{P}]/gu)||[]).length;
+    var letters=(t.match(/[A-Za-z]/g)||[]).length;
+    document.getElementById('wc-chars').textContent=charCount;
+    document.getElementById('wc-han').textContent=hanCount;
+    document.getElementById('wc-words').textContent=wordCount;
+    document.getElementById('wc-digits').textContent=digits;
+    document.getElementById('wc-punct').textContent=punct;
+    document.getElementById('wc-letters').textContent=letters;
+  }
+  input.addEventListener('input',update);
+  document.getElementById('wc-clear').onclick=function(){ input.value=''; update(); };
+  update();
+})();
+</script>
+
+<script>
+/* 图片转换（JPG/PNG/WebP） */
+(function(){
+  const $=s=>document.getElementById(s);
+  const fmt=$('img-format'), q=$('img-quality'), max=$('img-max'), bg=$('img-bg'), out=$('img-out'), pg=$('img-pg');
+  $('img-max-mb-label').textContent = getComputedStyle(document.documentElement).getPropertyValue('--img-max-mb').trim();
+  function clamp(n,min,max){return Math.max(min,Math.min(max,n))}
+  async function bitmapFrom(file){
+    if ('createImageBitmap' in window){
+      try{ return await createImageBitmap(file,{imageOrientation:'from-image'}); }catch(e){}
+    }
+    return await new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=URL.createObjectURL(file); });
+  }
+  function drawToCanvas(bm, maxSide, fillForJPEG, isJPEG){
+    let w=bm.width, h=bm.height;
+    if (maxSide===0){ const dm = navigator.deviceMemory || 4; maxSide = dm>=8 ? 3600 : (dm>=4 ? 2800 : 1800); }
+    if (maxSide>0){ const r=Math.min(1, maxSide/Math.max(w,h)); w=Math.round(w*r); h=Math.round(h*r); }
+    const maxPixels = 20000000; if (w*h > maxPixels){ const r = Math.sqrt(maxPixels/(w*h)); w = Math.round(w*r); h = Math.round(h*r); }
+    const cv=('OffscreenCanvas' in window)? new OffscreenCanvas(w,h) : document.createElement('canvas');
+    cv.width=w; cv.height=h;
+    const cx=cv.getContext('2d');
+    if (isJPEG && fillForJPEG){ cx.fillStyle=fillForJPEG; cx.fillRect(0,0,w,h); }
+    cx.drawImage(bm,0,0,w,h);
+    return cv;
+  }
+  function basename(name){ return name.replace(/\.[^.]+$/,''); }
+  function extFromMime(m){ return m==='image/png'?'.png':(m==='image/jpeg'?'.jpg':'.webp'); }
+
+  document.getElementById('img-run').addEventListener('click', async()=>{
+    out.innerHTML='';
+    const files=[...document.getElementById('img-file').files]; if(!files.length) return alert('请选择图片');
+    for(let i=0;i<files.length;i++){
+      const f=files[i];
+      const MB=f.size/1024/1024; const maxMb=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--img-max-mb'))||25;
+      if (MB>maxMb){ const div=document.createElement('div'); div.className='item'; div.textContent='⚠️ '+f.name+' 超过 '+maxMb+'MB，已跳过'; out.append(div); continue; }
+      const target=fmt.value, isJPEG=target==='image/jpeg'; const quality=clamp(parseInt(q.value||'85',10),1,100)/100; const maxSide=parseInt(max.value||'0',10)||0;
+      pg.value=i/files.length;
+      const bm=await bitmapFrom(f); const cv=drawToCanvas(bm, maxSide, $('img-bg').value, isJPEG);
+      const blob=await (cv.convertToBlob? cv.convertToBlob({type:target, quality:(isJPEG||target==='image/webp')?quality:undefined})
+                  : new Promise(res=>cv.toBlob(res, target, (isJPEG||target==='image/webp')?quality:undefined)));
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=basename(f.name)+extFromMime(target); a.textContent=a.download+'（'+Math.round(blob.size/1024)+' KB）';
+      const div=document.createElement('div'); div.className='item'; div.append(a); out.append(div);
+    }
+    pg.value=1;
+  });
+  document.getElementById('img-clear').addEventListener('click', ()=>{ out.innerHTML=''; pg.value=0; });
+})();
+</script>
+
+<script>
+/* FFmpeg 本地优先 + CDN 兜底（转换：MP3/GIF） */
+(function(){
+  const $=s=>document.getElementById(s);
+  const file=$('vid-file'), loadBtn=$('vid-load'), mp3Btn=$('to-mp3'), gifBtn=$('to-gif');
+  const fpsSel=$('gif-fps'), wSel=$('gif-w'), links=$('vid-links'), logEl=$('vid-log'), pg=$('vid-pg'), clearBtn=$('vid-clear');
+  $('vid-max-mb-label') && ($('vid-max-mb-label').textContent = getComputedStyle(document.documentElement).getPropertyValue('--vid-max-mb').trim());
+  function log(m){ logEl.textContent += m + '\\n'; logEl.scrollTop = logEl.scrollHeight; }
+
+  let ffmpeg=null, ready=false, curFile=null, base='local';
+  mp3Btn.disabled = true; gifBtn.disabled = true;
+  if (location.protocol === 'file:') {
+    log('⚠️ 当前通过 file:// 打开，本地浏览器会阻止 wasm/worker 加载。请用 http(s) 方式访问。');
+  }
+  file.addEventListener('change', e=>{ curFile=e.target.files[0]||null; links.innerHTML=''; logEl.textContent=''; });
+
+  function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.async=true; s.crossOrigin='anonymous'; s.onload=res; s.onerror=()=>rej(new Error('加载脚本失败：'+src)); document.head.appendChild(s); }); }
+  async function ensureFFmpegLib(){
+    if (window.FFmpeg) return;
+    const tries=[
+      {label:'本地 ./ffmpeg/ffmpeg.min.js', url:'./ffmpeg/ffmpeg.min.js'},
+      {label:'CDN unpkg', url:'https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js'},
+      {label:'CDN jsDelivr', url:'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js'}
+    ];
+    for (const t of tries){
+      try{ log('尝试加载：'+t.label); await loadScript(t.url); base=t.url.startsWith('http')?(t.url.includes('unpkg')?'https://unpkg.com':'https://cdn.jsdelivr.net/npm'):'local'; log('✅ 成功加载：'+t.label); return; }
+      catch(err){ log('❌ '+err.message); }
+    }
+    throw new Error('无法加载 FFmpeg 库（本地与两个 CDN 均失败）');
+  }
+
+  async function loadEngine(){
+    if (ready) return true;
+    try{
+      await ensureFFmpegLib();
+      const { createFFmpeg } = window.FFmpeg;
+      const corePath = (base==='local') ? './ffmpeg/ffmpeg-core.js' : base + '/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js';
+      ffmpeg = createFFmpeg({ log:true, corePath });
+      ffmpeg.setProgress(({ratio})=>{ pg.value = ratio || 0; });
+      await ffmpeg.load();
+      ready = true; mp3Btn.disabled=false; gifBtn.disabled=false; log('✅ 引擎加载完成'); return true;
+    }catch(e){ log('❌ 引擎加载失败：'+e.message); return false; }
+  }
+  loadBtn.addEventListener('click', loadEngine);
+
+  async function ensureInput(){ if(!ready) throw new Error('引擎未加载'); if(!curFile) throw new Error('请选择一个视频文件'); const { fetchFile } = window.FFmpeg; await ffmpeg.FS('writeFile','input.mp4', await fetchFile(curFile)); }
+  function downloadFS(name, mime){ const data = ffmpeg.FS('readFile', name); const url = URL.createObjectURL(new Blob([data.buffer], {type: mime})); const a = document.createElement('a'); a.href=url; a.download=name; a.className='badge'; a.textContent='下载 '+name+'（'+Math.round(data.length/1024)+' KB）'; const wrap=document.createElement('div'); wrap.className='item'; wrap.append(a); links.append(wrap); }
+
+  mp3Btn.addEventListener('click', async()=>{
+    if (!ready) { const ok = await loadEngine(); if(!ok) return; }
+    try{ await ensureInput(); log('▶️ MP4 → MP3 中…'); try{ await ffmpeg.run('-i','input.mp4','-vn','-acodec','libmp3lame','-b:a','192k','output.mp3'); } catch(e){ log('ℹ️ libmp3lame 不可用，退回兼容方案'); await ffmpeg.run('-i','input.mp4','-vn','-q:a','2','-map','a','output.mp3'); } downloadFS('output.mp3','audio/mpeg'); log('✅ 完成'); }catch(e){ log('❌ 失败：'+e.message); }
+  });
+  gifBtn.addEventListener('click', async()=>{
+    if (!ready) { const ok = await loadEngine(); if(!ok) return; }
+    try{ await ensureInput(); const fps=String(parseInt(fpsSel.value||'12',10)); const w=String(parseInt(wSel.value||'480',10)); log('▶️ MP4 → GIF 中…（fps='+fps+', width='+w+'）'); await ffmpeg.run('-i','input.mp4','-vf',`fps=${fps},scale=${w}:-1:flags=lanczos,palettegen`, '-y','/tmp/palette.png'); await ffmpeg.run('-i','input.mp4','-i','/tmp/palette.png','-lavfi',`fps=${fps},scale=${w}:-1:flags=lanczos,paletteuse`, '-loop','0','output.gif'); downloadFS('output.gif','image/gif'); log('✅ 完成'); }catch(e){ log('❌ 失败：'+e.message); }
+  });
+  clearBtn.addEventListener('click', ()=>{ links.innerHTML=''; logEl.textContent=''; pg.value=0; });
+})();
+</script>
+
+<script>
+/* 背景粒子（v7d） */
+(function(){
+  var cnv=document.getElementById('fx'); if(!cnv) return; var ctx=cnv.getContext('2d'); var stars=[], cssW=0, cssH=0, dpr=window.devicePixelRatio||1, t=0;
+  function makeStars(){ var area=cssW*cssH, density=0.00012; var count=Math.max(120, Math.floor(area*density)); stars=new Array(count).fill(0).map(()=>({x:Math.random()*cssW,y:Math.random()*cssH,r:Math.pow(Math.random(),2)*1.6+0.3,a0:Math.random()*Math.PI*2,sp:0.5+Math.random()*0.8,c:180+Math.floor(Math.random()*60)})); }
+  function resize(){ var w=Math.ceil(window.innerWidth*dpr), h=Math.ceil(window.innerHeight*dpr); cnv.width=w; cnv.height=h; cnv.style.width=(w/dpr)+'px'; cnv.style.height=(h/dpr)+'px'; cssW=w/dpr; cssH=h/dpr; makeStars(); }
+  function draw(){ var c=ctx; c.clearRect(0,0,cnv.width,cnv.height); c.save(); c.scale(dpr,dpr);
+    for(var i=0;i<stars.length;i++){ var s=stars[i], tw=0.6+0.4*Math.sin(t*s.sp+s.a0), alpha=0.35+0.45*tw; var grd=c.createRadialGradient(s.x,s.y,0,s.x,s.y,s.r*3);
+      grd.addColorStop(0,'rgba('+s.c+','+(s.c+30)+',255,'+alpha+')'); grd.addColorStop(1,'rgba(0,0,0,0)'); c.fillStyle=grd; c.beginPath(); c.arc(s.x,s.y,s.r*3,0,Math.PI*2); c.fill();
+      c.fillStyle='rgba(255,255,255,'+Math.min(1,alpha+0.2)+')'; c.beginPath(); c.arc(s.x,s.y,s.r,0,Math.PI*2); c.fill(); }
+    c.restore(); t+=0.01; requestAnimationFrame(draw); }
+  window.addEventListener('resize',resize,{passive:true}); resize(); draw();
+})();
+</script>
+
+<!-- 农历算法 + 绑定（完整） -->
+<script>
+(function(){
+  const lunarInfo=[
+  0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,
+  0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,
+  0x04970,0x0a4b0,0x0b4b5,0x06a50,0x06d40,0x1ab54,0x02b60,0x09570,0x052f2,0x04970,
+  0x06566,0x0d4a0,0x0ea50,0x06e95,0x05ad0,0x02b60,0x186e3,0x092e0,0x1c8d7,0x0c950,
+  0x0d4a0,0x1d8a6,0x0b550,0x056a0,0x1a5b4,0x025d0,0x092d0,0x0d2b2,0x0a950,0x0b557,
+  0x06ca0,0x0b550,0x15355,0x04da0,0x0a5b0,0x14573,0x052b0,0x0a9a8,0x0e950,0x06aa0,
+  0x0aea6,0x0ab50,0x04b60,0x0aae4,0x0a570,0x05260,0x0f263,0x0d950,0x05b57,0x056a0,
+  0x096d0,0x04dd5,0x04ad0,0x0a4d0,0x0d4d4,0x0d250,0x0d558,0x0b540,0x0b5a0,0x195a6,
+  0x095b0,0x049b0,0x0a974,0x0a4b0,0x0b27a,0x06a50,0x06d40,0x0af46,0x0ab60,0x09570,
+  0x04af5,0x04970,0x064b0,0x074a3,0x0ea50,0x06b58,0x05ac0,0x0ab60,0x096d5,0x092e0,
+  0x0c960,0x0d954,0x0d4a0,0x0da50,0x07552,0x056a0,0x0abb7,0x025d0,0x092d0,0x0cab5,
+  0x0a950,0x0b4a0,0x0baa4,0x0ad50,0x055d9,0x04ba0,0x0a5b0,0x15176,0x052b0,0x0a930,
+  0x07954,0x06aa0,0x0ad50,0x05b52,0x04b60,0x0a6e6,0x0a4e0,0x0d260,0x0ea65,0x0d530,
+  0x05aa0,0x076a3,0x096d0,0x04bd7,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,
+  0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0,
+  0x14b63,0x09370,0x049f8,0x04970,0x064b0,0x168a6,0x0ea50,0x06b20,0x1a6c4,0x0aae0,
+  0x0a2e0,0x0d2e3,0x0c960,0x0d557,0x0d4a0,0x0da50,0x05d55,0x056a0,0x0a6d0,0x055d4,
+  0x052d0,0x0a9b8,0x0a950,0x0b4a0,0x0b6a6,0x0ad50,0x055a0,0x0aba4,0x0a5b0,0x052b0,
+  0x0b273,0x06930,0x07337,0x06aa0,0x0ad50,0x14b55,0x04b60,0x0a570,0x054e4,0x0d160,
+  0x0e968,0x0d520,0x0daa0,0x16aa6,0x056d0,0x04ae0,0x0a9d4,0x0a2d0,0x0d150,0x0f252,
+  0x0d520
+  ];
+  const baseDate=new Date(1900,0,31);
+  function lYearDays(y){ let sum=348; const info=lunarInfo[y-1900]; for(let i=0x8000;i>0x8;i>>=1){ sum += (info & i)?1:0; } return sum + leapDays(y); }
+  function leapMonth(y){ return lunarInfo[y-1900] & 0xf; }
+  function leapDays(y){ if(leapMonth(y)) return (lunarInfo[y-1900] & 0x10000)?30:29; return 0; }
+  function monthDays(y,m){ return (lunarInfo[y-1900] & (0x10000>>m))?30:29; }
+  function solar2lunar(y,m,d){
+    let offset=(Date.UTC(y,m-1,d)-Date.UTC(1900,0,31))/86400000;
+    let i, temp, isLeap=false, ly;
+    for(i=1900; i<=2100 && offset>0; i++){ temp=lYearDays(i); offset-=temp; }
+    if(offset<0){ offset+=temp; i--; }
+    ly=i; const lm=leapMonth(ly);
+    let lmon, lday; for(i=1;i<=12 && offset>=0;i++){ if(lm>0 && i===(lm+1) && !isLeap){ --i; isLeap=true; temp=leapDays(ly); }
+      else { temp=monthDays(ly,i); }
+      if(isLeap && i===(lm+1)) isLeap=false; offset-=temp;
+      if(offset<0){ offset+=temp; lmon=i; lday=offset+1; break; }
+    }
+    return {ly, lm:lmon, ld:lday, isLeap:(isLeap && i===(lm+1))};
+  }
+  function lunar2solar(ly,lm,ld,isLeap){
+    if(ly<1900||ly>2100) return null;
+    let offset=0; for(let y=1900;y<ly;y++) offset+=lYearDays(y);
+    const leap=leapMonth(ly);
+    for(let m=1;m<lm;m++) offset+=monthDays(ly,m);
+    if(leap && lm>leap) offset+=leapDays(ly);
+    if(isLeap){ if(leap!==lm) return null; } if(isLeap) offset+=monthDays(ly,lm);
+    offset+=ld-1;
+    const d=new Date(baseDate.getTime()+offset*86400000);
+    return {y:d.getFullYear(), m:d.getMonth()+1, d:d.getDate()};
+  }
+  const nStr1=["日","一","二","三","四","五","六"];
+  const nStr2=["初","十","廿","卅"];
+  function cDay(d){ if(d===10) return "初十"; if(d===20) return "二十"; if(d===30) return "三十"; return nStr2[Math.floor((d-1)/10)] + ["一","二","三","四","五","六","七","八","九"][ (d-1)%10 ]; }
+  function cMonth(m){ const arr=["正","二","三","四","五","六","七","八","九","十","冬","腊"]; return arr[m-1]+"月"; }
+  const tg="甲乙丙丁戊己庚辛壬癸".split(""); const dz="子丑寅卯辰巳午未申酉戌亥".split(""); const sx="鼠牛虎兔龙蛇马羊猴鸡狗猪".split("");
+  function gzYear(y){ const tgIdx=(y-4)%10, dzIdx=(y-4)%12; return tg[tgIdx]+dz[dzIdx]+'年（'+sx[dzIdx]+'）'; }
+  function pad2(n){return (n<10?'0':'')+n;}
+  function fmtGregorian(y,m,d){return y+'-'+pad2(m)+'-'+pad2(d);}
+  function fmtLunar(obj){ return gzYear(obj.ly)+' '+(obj.isLeap?'闰':'')+cMonth(obj.lm)+' '+cDay(obj.ld); }
+  window.__lunar = { solar2lunar, lunar2solar, fmtLunar, fmtGregorian, nStr1 };
+})();
+</script>
+
+<script>
+/* 绑定日期功能（完整） */
+(function(){
+  const L=window.__lunar;
+  function fmt(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}
+  function wd(n){return ['日','一','二','三','四','五','六'][n]}
+  const today=new Date(); ['d-base','d-a','d-b','g2l-date','w-date'].forEach(id=>{const el=document.getElementById(id); if(el) el.value=fmt(today);});
+
+  document.getElementById('btn-add').onclick=function(){
+    const base=new Date(document.getElementById('d-base').value+'T00:00:00');
+    const off=parseInt(document.getElementById('d-offset').value||'0',10);
+    const t=new Date(base.getTime()+off*86400000);
+    document.getElementById('d-add-out').textContent=fmt(t);
+    document.getElementById('d-add-week').textContent='星期'+wd(t.getDay());
+    const lunar=L.solar2lunar(t.getFullYear(),t.getMonth()+1,t.getDate());
+    document.getElementById('d-add-lunar').textContent=L.fmtLunar(lunar);
+  };
+
+  document.getElementById('btn-diff').onclick=function(){
+    const a=new Date(document.getElementById('d-a').value+'T00:00:00'), b=new Date(document.getElementById('d-b').value+'T00:00:00');
+    const diff=Math.round((b-a)/86400000), abs=Math.abs(diff);
+    document.getElementById('d-diff-days').textContent=diff;
+    document.getElementById('d-diff-weeks').textContent=Math.floor(abs/7)+' 周 '+(abs%7)+' 天';
+  };
+
+  document.getElementById('btn-g2l').onclick=function(){
+    const v=document.getElementById('g2l-date').value; if(!v) return;
+    const d=new Date(v+'T00:00:00'); const lunar=L.solar2lunar(d.getFullYear(),d.getMonth()+1,d.getDate());
+    document.getElementById('g2l-out').textContent=L.fmtLunar(lunar);
+  };
+
+  document.getElementById('btn-l2g').onclick=function(){
+    const y=parseInt(document.getElementById('l-year').value||'0',10);
+    const m=parseInt(document.getElementById('l-month').value||'0',10);
+    const d=parseInt(document.getElementById('l-day').value||'0',10);
+    const leap=document.getElementById('l-leap').value==='是';
+    if(!(y>=1900&&y<=2100&&m>=1&&m<=12&&d>=1&&d<=30)){ alert('请输入有效的农历年月日'); return; }
+    const g=L.lunar2solar(y,m,d,leap);
+    if(!g){ alert('该年不存在此闰月或日期'); return; }
+    document.getElementById('l2g-out').textContent=L.fmtGregorian(g.y,g.m,g.d);
+    const wd2=new Date(g.y+'-'+('0'+g.m).slice(-2)+'-'+('0'+g.d).slice(-2)+'T00:00:00').getDay();
+    document.getElementById('l2g-week').textContent='星期'+L.nStr1[wd2];
+  };
+
+  document.getElementById('btn-week').onclick=function(){
+    const v=document.getElementById('w-date').value; if(!v) return;
+    const d=new Date(v+'T00:00:00'); document.getElementById('w-out').textContent='星期'+wd(d.getDay());
+  };
+})();
+</script>
+
+<script>
+(function(){
+  const root=document.documentElement, btn=document.getElementById('theme-toggle'), menu=document.getElementById('theme-menu');
+  function apply(pref){
+    try{ localStorage.setItem('theme-pref', pref); }catch(e){}
+    const sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const theme = (pref==='dark'||pref==='light') ? pref : (sysDark?'dark':'light');
+    root.setAttribute('data-theme', theme);
+  }
+  btn.addEventListener('click', e=>{ e.stopPropagation(); btn.classList.toggle('open'); menu.setAttribute('aria-hidden', btn.classList.contains('open')?'false':'true'); });
+  document.addEventListener('click', ()=>{ btn.classList.remove('open'); menu.setAttribute('aria-hidden','true'); });
+  menu.querySelectorAll('.opt').forEach(x=>x.addEventListener('click', ()=>{ apply(x.dataset.v); btn.classList.remove('open'); }));
+  const mq=window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+  if(mq && mq.addEventListener){ mq.addEventListener('change', ()=>{ try{ var pref=localStorage.getItem('theme-pref')||'system'; if(pref==='system') apply('system'); }catch(e){} }); }
+  try{ apply(localStorage.getItem('theme-pref')||'system'); }catch(e){}
+})();
+</script>
+
+
+<script>
+/* 图片压缩（纯前端 Canvas，支持按质量/按目标大小） */
+(function(){
+  const $=s=>document.querySelector(s);
+  const file=$('#cp-img-file'), modeSel=$('#cp-img-mode'), qSel=$('#cp-img-quality'), maxSel=$('#cp-img-max'), targetKB=$('#cp-img-target');
+  const runBtn=$('#cp-img-run'), clearBtn=$('#cp-img-clear'), out=$('#cp-img-out'), pg=$('#cp-img-pg');
+  if(!file||!runBtn) return;
+
+  function digits(n){ return Math.round(n*10)/10; }
+  function getMaxMb(){ const v=getComputedStyle(document.documentElement).getPropertyValue('--img-max-mb'); return parseFloat(v)||25; }
+
+  async function bitmapFrom(f){ return await createImageBitmap(f); }
+  function drawToCanvas(bm, maxSide){
+    let w=bm.width, h=bm.height;
+    if (maxSide && (w>maxSide || h>maxSide)){ const r=Math.min(maxSide/w, maxSide/h); w=Math.round(w*r); h=Math.round(h*r); }
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h; const cx=cv.getContext('2d'); cx.drawImage(bm,0,0,w,h); return cv;
+  }
+  function ext(m){ return m==='image/png'?'.png':(m==='image/jpeg'?'.jpg':'.webp'); }
+
+  async function compressOnce(f, targetMime, quality, maxSide){
+    const bm = await bitmapFrom(f);
+    const cv = drawToCanvas(bm, maxSide);
+    const mimeOk = (targetMime!=='image/webp') || cv.toDataURL('image/webp').startsWith('data:image/webp');
+    const mime = mimeOk ? targetMime : 'image/jpeg';
+    const blob = await new Promise(res=>cv.toBlob(res, mime, mime==='image/png'?undefined:quality));
+    return blob;
+  }
+
+  async function run(){
+    out.innerHTML=''; pg.value=0;
+    const files=[...file.files]; if(!files.length){ alert('请选择图片'); return; }
+    const maxMb=getMaxMb();
+    for(let i=0;i<files.length;i++){
+      const f=files[i]; const MB=f.size/1024/1024;
+      if(MB>maxMb){ const div=document.createElement('div'); div.className='item'; div.textContent='⚠️ '+f.name+' 超过 '+maxMb+'MB，已跳过'; out.append(div); continue; }
+      const maxSide=parseInt(maxSel.value||'0',10)||0;
+      const mode=modeSel.value; const targetMime='image/webp'; // 统一导出 webp（体积小）；如需跟随用户选择可读对应 select
+      let blob;
+      if(mode==='kb'){
+        const limitKB=Math.max(10, parseInt(targetKB.value||'0',10));
+        let q = parseInt(qSel.value||'88',10)/100;
+        for(let t=0;t<8;t++){
+          blob = await compressOnce(f, targetMime, q, maxSide);
+          const sizeKB = blob.size/1024;
+          if(sizeKB<=limitKB) break;
+          q = Math.max(0.4, q-0.08); // 逐步降低质量，最小到40%
+        }
+      }else{
+        const q = parseInt(qSel.value||'88',10)/100;
+        blob = await compressOnce(f, targetMime, q, maxSide);
+      }
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(f.name.replace(/\.[^.]+$/,'')||'image')+ext('image/webp');
+      a.textContent=a.download+'（'+Math.round(blob.size/1024)+' KB）';
+      const div=document.createElement('div'); div.className='item'; div.append(a); out.append(div);
+      pg.value=(i+1)/files.length;
+    }
+  }
+
+  runBtn.addEventListener('click', run);
+  clearBtn.addEventListener('click', ()=>{ out.innerHTML=''; pg.value=0; });
+})();
+</script>
+
+</body>
+</html>
