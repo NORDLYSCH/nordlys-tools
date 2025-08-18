@@ -429,10 +429,10 @@ progress{ width:260px; height:12px; border-radius:8px; overflow:hidden; }
     <!-- 视频压缩 -->
     <div id="cp-vid" hidden>
       <div class="row">
-        <input id="cp-vid-file" type="file" accept="video/*">
-        <button id="cp-vid-load" class="primary">加载引擎</button>
-        <progress id="cp-vid-pg" max="1" value="0"></progress>
-      </div>
+  <input id="cp-vid-file" type="file" accept="video/*">
+  <progress id="cp-vid-up"  max="1" value="0" title="上传进度"></progress>
+  <progress id="cp-vid-pg"  max="1" value="0" title="下载进度"></progress>
+</div>
       <div class="row">
         <div class="csel" data-for="cp-vid-preset"></div>
         <div class="csel" data-for="cp-vid-w"></div>
@@ -440,6 +440,8 @@ progress{ width:260px; height:12px; border-radius:8px; overflow:hidden; }
         <div class="csel" data-for="cp-vid-crf"></div>
         <div class="csel" data-for="cp-vid-ab"></div>
         <button id="cp-vid-run" class="primary">开始压缩</button>
+       <button id="cp-vid-cancel" class="subtle" disabled>取消</button>
+
       </div>
       <select id="cp-vid-preset" hidden>
         <option value="veryfast" selected>veryfast（速度快）</option>
@@ -1131,6 +1133,146 @@ progress{ width:260px; height:12px; border-radius:8px; overflow:hidden; }
 
   runBtn.addEventListener('click', run);
   clearBtn.addEventListener('click', ()=>{ out.innerHTML=''; pg.value=0; });
+})();
+</script>
+<script>
+/* 云端视频压缩接入（/api/compress）—— 上传进度 + 下载进度 + 失败重试 + 取消 */
+(function(){
+  const $ = s => document.getElementById(s);
+  const file    = $('cp-vid-file');
+  const runBtn  = $('cp-vid-run');
+  const cancel  = $('cp-vid-cancel');
+  const upBar   = $('cp-vid-up');
+  const downBar = $('cp-vid-pg');
+  const logEl   = $('cp-vid-log');
+  const linksEl = $('cp-vid-links');
+  const sel = id => document.getElementById(id);
+
+  let xhr = null;
+
+  function log(msg){ if(!logEl) return; logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+  function fmt(n){ if(!Number.isFinite(n)) return '-'; const u=['B','KB','MB','GB']; let i=0,x=n; while(x>=1024&&i<u.length-1){x/=1024;i++;} return (i?x.toFixed(1):x|0)+' '+u[i]; }
+  function resetBars(){
+    if (upBar)   { upBar.max = 1; upBar.value = 0; }
+    if (downBar) { downBar.max = 1; downBar.value = 0; }
+  }
+  function buildForm(){
+    const fd = new FormData();
+    const f = file.files[0];
+    if (!f) throw new Error('请选择一个视频文件');
+    fd.append('file', f);
+
+    const crf    = sel('cp-vid-crf')?.value;
+    const preset = sel('cp-vid-preset')?.value;
+    const width  = sel('cp-vid-w')?.value;
+    const ab     = sel('cp-vid-ab')?.value;
+
+    if (crf)    fd.append('crf', crf);
+    if (preset) fd.append('preset', preset);
+    if (width && width !== '0') fd.append('width', width);
+    if (ab)     fd.append('audioBitrate', ab + 'k');
+    return fd;
+  }
+  function parseFilenameFromDisposition(dispo, fallback){
+    if (!dispo) return fallback;
+    const m = /filename\*?=(?:UTF-8''|")?([^\";]+)/i.exec(dispo);
+    if (m && m[1]) {
+      try { return decodeURIComponent(m[1].replace(/\"/g, '')); } catch {}
+      return m[1].replace(/\"/g, '');
+    }
+    return fallback;
+  }
+  function sendOnce(fd){
+    return new Promise((resolve, reject)=>{
+      xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/compress', true);
+      xhr.responseType = 'blob';
+
+      xhr.upload.onprogress = e => { if (e.lengthComputable && upBar){ upBar.value = e.loaded / e.total; } };
+      xhr.onprogress = e => {
+        const len = Number(xhr.getResponseHeader('Content-Length')) || 0;
+        if (downBar){ downBar.value = len>0 ? e.loaded / len : 0; }
+      };
+
+      xhr.onload = async () => {
+        const status = xhr.status;
+        const ct     = xhr.getResponseHeader('Content-Type') || '';
+        const dispo  = xhr.getResponseHeader('Content-Disposition') || '';
+
+        if (status >= 200 && status < 300) {
+          if (ct.includes('application/json')) {
+            try {
+              const text = await xhr.response.text();
+              const j = JSON.parse(text);
+              return reject({ retriable:false, status, message: j?.error || text });
+            } catch {
+              return reject({ retriable:false, status, message: 'JSON 解析失败' });
+            }
+          }
+          const srcFile = fd.get('file');
+          const base = (srcFile && srcFile.name) ? srcFile.name.replace(/\.[^.]+$/, '') : 'video';
+          const name = parseFilenameFromDisposition(dispo, base + '-compressed.mp4');
+
+          const blob = xhr.response;
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(url);
+          return resolve({ name, size: blob.size });
+        }
+
+        let message = `HTTP ${status}`;
+        try {
+          const text = await xhr.response.text();
+          try { const j = JSON.parse(text); message = j?.error || text; } catch { message = text || message; }
+        } catch {}
+        const retriable = (status === 408 || status === 429 || (status >= 500 && status <= 599));
+        reject({ retriable, status, message });
+      };
+
+      xhr.onerror  = () => reject({ retriable:true, status:0, message:'网络错误' });
+      xhr.onabort  = () => reject({ retriable:false, status:0, message:'已取消' });
+      xhr.ontimeout= () => reject({ retriable:true, status:0, message:'请求超时' });
+
+      try { xhr.send(fd); } catch (e) { reject({ retriable:true, status:0, message:String(e?.message||e) }); }
+    });
+  }
+
+  async function sendWithRetry(fd, maxRetries=2){
+    let attempt = 0, lastErr = null;
+    while (attempt <= maxRetries){
+      runBtn.disabled = true; cancel.disabled = false; resetBars();
+      log(`开始上传（尝试 ${attempt+1}/${maxRetries+1}）…`);
+      cancel.onclick = ()=>{ try{ xhr?.abort(); }catch{} };
+
+      try{
+        const res = await sendOnce(fd);
+        log(`✅ 成功：${res.name} · ${fmt(res.size)}`);
+        return true;
+      }catch(err){
+        lastErr = err;
+        log(`❌ 失败：${err.message || err} ${err.status?('· HTTP '+err.status):''} ${err.retriable?'· 将重试':''}`);
+        if (!err.retriable || attempt === maxRetries) break;
+        const backoff = 1500 * Math.pow(2, attempt);
+        log(`等待 ${Math.round(backoff/1000)}s 后重试…`);
+        await new Promise(r=>setTimeout(r, backoff));
+        attempt++;
+      }finally{
+        runBtn.disabled = false; cancel.disabled = true;
+      }
+    }
+    throw lastErr || new Error('上传失败');
+  }
+
+  runBtn?.addEventListener('click', async (e)=>{
+    e.preventDefault();
+    try{
+      const fd = buildForm();
+      await sendWithRetry(fd, 2);
+    }catch(e2){
+      log('终止：' + (e2?.message || e2));
+    }
+  });
 })();
 </script>
 
